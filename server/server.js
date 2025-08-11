@@ -109,9 +109,9 @@ async function startNewRound(gameCode) {
     if (game) {
         game.responses = {};
 
-        // Generate the seed only once per round and store it
-        game.imageSeed = Math.floor(Math.random() * 100000);
-        const imageUrl = `https://picsum.photos/400/300?random=${game.imageSeed}`;
+        // Pick a deterministic image ID for both players
+        game.imageSeed = Math.floor(Math.random() * 1000); // picsum IDs go up to ~1084
+        const imageUrl = `https://picsum.photos/id/${game.imageSeed}/400/300`;
 
         game.prompt = imageUrl;
         io.to(gameCode).emit('new_round', { prompt: imageUrl, currentRound: game.currentRound });
