@@ -5,7 +5,6 @@ const { Server } = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
-// We'll configure Socket.IO with CORS settings for production
 const io = new Server(server, {
     cors: {
         origin: "https://mindlinktelepathy.netlify.app",
@@ -17,20 +16,17 @@ const port = process.env.PORT || 3000;
 // Game state management
 const games = {}; // Stores active game rooms
 
-// Serve the index.html file for the root route.
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '../client/index.html'));
 });
 
-// Serve static files from the 'client' directory for all other routes.
 app.use(express.static(path.join(__dirname, '../client')));
 
 io.on('connection', (socket) => {
     console.log(`User connected: ${socket.id}`);
 
-    // Handle creating a new game room
     socket.on('create_game', (data) => {
-        const { playerName } = data;
+        const { playerName, totalRounds } = data;
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
         let gameCode = '';
         for (let i = 0; i < 4; i++) {
@@ -42,8 +38,13 @@ io.on('connection', (socket) => {
                 players: [{ id: socket.id, name: playerName }],
                 state: 'waiting',
                 prompt: null,
-                responses: {}
+                responses: {},
+                imageSeed: null,
+                currentRound: 1,
+                totalRounds: totalRounds,
+                scores: {}
             };
+            games[gameCode].scores[socket.id] = 0;
             socket.join(gameCode);
             socket.emit('game_created', { gameCode });
             console.log(`Game created with code: ${gameCode} by ${playerName}`);
@@ -52,13 +53,13 @@ io.on('connection', (socket) => {
         }
     });
 
-    // Handle joining an existing game room
     socket.on('join_game', (data) => {
         const { gameCode, playerName } = data;
         const game = games[gameCode];
 
         if (game && game.players.length === 1) {
             game.players.push({ id: socket.id, name: playerName });
+            game.scores[socket.id] = 0;
             game.state = 'playing';
             socket.join(gameCode);
             
@@ -76,7 +77,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    // Handle player submission
     socket.on('submit_word', (data) => {
         const { gameCode, word } = data;
         const game = games[gameCode];
@@ -90,7 +90,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    // Handle disconnection
     socket.on('disconnect', () => {
         console.log(`User disconnected: ${socket.id}`);
         for (const code in games) {
@@ -109,13 +108,12 @@ async function startNewRound(gameCode) {
     const game = games[gameCode];
     if (game) {
         game.responses = {};
-
-        // Use a unique random seed for each round to ensure the same image for both players
+        
         const imageSeed = Math.random();
         const imageUrl = `https://picsum.photos/400/300?random=${imageSeed}`;
         
         game.prompt = imageUrl;
-        io.to(gameCode).emit('new_round', { prompt: imageUrl });
+        io.to(gameCode).emit('new_round', { prompt: imageUrl, currentRound: game.currentRound });
         
         setTimeout(() => {
             if (game.state === 'playing') {
@@ -134,6 +132,8 @@ function endRound(gameCode) {
         let match = false;
         if (player1Word && player2Word && player1Word.toLowerCase() === player2Word.toLowerCase()) {
             match = true;
+            game.scores[player1Id]++;
+            game.scores[player2Id]++;
         }
 
         io.to(gameCode).emit('round_over', {
@@ -142,7 +142,21 @@ function endRound(gameCode) {
             player2Word: player2Word || 'No response'
         });
 
-        setTimeout(() => startNewRound(gameCode), 3000);
+        game.currentRound++;
+
+        if (game.currentRound > game.totalRounds) {
+            setTimeout(() => {
+                const totalScore = Object.values(game.scores).reduce((sum, score) => sum + score, 0);
+                const totalPossibleScore = game.totalRounds * 2;
+                const similarityPercentage = (totalScore / totalPossibleScore) * 100;
+                io.to(gameCode).emit('game_over', {
+                    similarity: similarityPercentage.toFixed(0)
+                });
+                delete games[gameCode];
+            }, 3000);
+        } else {
+            setTimeout(() => startNewRound(gameCode), 3000);
+        }
     }
 }
 
