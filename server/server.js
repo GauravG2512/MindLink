@@ -17,20 +17,6 @@ const port = process.env.PORT || 3000;
 // Game state management
 const games = {}; // Stores active game rooms
 
-// List of words to be used as image prompts
-const imagePrompts = [
-    'a cat looking disappointed',
-    'the moment you realize you forgot something',
-    'a computer with too many tabs open',
-    'a group of raccoons planning a heist',
-    'when the coffee kicks in',
-    'me trying to be a functioning adult',
-    'a microwave dinner that looks nothing like the box',
-    'that feeling when you find a perfect parking spot',
-    'a dramatic prairie dog',
-    'trying to open a package with your teeth'
-];
-
 // Serve the index.html file for the root route.
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '../client/index.html'));
@@ -122,37 +108,12 @@ io.on('connection', (socket) => {
 async function startNewRound(gameCode) {
     const game = games[gameCode];
     if (game) {
-        const randomIndex = Math.floor(Math.random() * imagePrompts.length);
-        const textPrompt = imagePrompts[randomIndex];
         game.responses = {};
 
-        // ====> YOUR API KEY IS INSERTED HERE <====
-        const apiKey = "AIzaSyAQ_Y7sLfXGz3ZEIzWkjQpV1pZdzBgDE-w";
-        
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`;
-        const payload = { instances: { prompt: textPrompt }, parameters: { "sampleCount": 1} };
-
-        try {
-            const response = await fetch(apiUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            const result = await response.json();
-            const base64Data = result?.predictions?.[0]?.bytesBase64Encoded;
-            
-            if (base64Data) {
-                const imageSrc = `data:image/png;base64,${base64Data}`;
-                game.prompt = imageSrc;
-                io.to(gameCode).emit('new_round', { prompt: imageSrc });
-            } else {
-                console.error("Image generation failed:", result);
-                io.to(gameCode).emit('new_round', { prompt: null });
-            }
-        } catch (error) {
-            console.error('Error generating image:', error);
-            io.to(gameCode).emit('new_round', { prompt: null });
-        }
+        // ====> Using Lorem Picsum for a random image <====
+        const imageUrl = `https://picsum.photos/400/300?random=${Math.random()}`;
+        game.prompt = imageUrl;
+        io.to(gameCode).emit('new_round', { prompt: imageUrl });
         
         setTimeout(() => {
             if (game.state === 'playing') {

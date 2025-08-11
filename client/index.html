@@ -35,7 +35,7 @@
             const [results, setResults] = useState(null);
             const [otherPlayerName, setOtherPlayerName] = useState('Waiting...'); 
             const socketRef = useRef(null);
-            const [isLoadingImage, setIsLoadingImage] = useState(false);
+            const [isGameStarting, setIsGameStarting] = useState(false);
 
             // Connect to the WebSocket server
             useEffect(() => {
@@ -53,16 +53,11 @@
                 });
 
                 socketRef.current.on('new_round', (data) => {
-                    if (data.prompt) {
-                        setPrompt(data.prompt);
-                        setIsLoadingImage(false);
-                    } else {
-                        setPrompt('https://placehold.co/400x300/16213e/e4e7ee?text=Image+Loading+Failed');
-                        setIsLoadingImage(false);
-                    }
+                    setPrompt(data.prompt);
                     setPlayerInput('');
                     setResults(null);
                     setTimeLeft(gameTime);
+                    setIsGameStarting(false);
                 });
 
                 socketRef.current.on('round_over', (data) => {
@@ -103,7 +98,7 @@
                 if (playerName.trim() === '') {
                     return;
                 }
-                setIsLoadingImage(true);
+                setIsGameStarting(true);
                 socketRef.current.emit('create_game', { playerName });
             };
 
@@ -114,7 +109,7 @@
                 if (gameCode.trim().length !== 4) {
                     return;
                 }
-                setIsLoadingImage(true);
+                setIsGameStarting(true);
                 socketRef.current.emit('join_game', { gameCode, playerName });
             };
 
@@ -171,9 +166,9 @@
                                     <button
                                         onClick={createGame}
                                         className="w-full px-6 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors"
-                                        disabled={isLoadingImage}
+                                        disabled={isGameStarting}
                                     >
-                                        {isLoadingImage ? 'Creating...' : 'Create Game'}
+                                        {isGameStarting ? 'Creating...' : 'Create Game'}
                                     </button>
                                 </div>
                                 <div className="relative flex items-center py-5">
@@ -192,9 +187,9 @@
                                     <button
                                         onClick={joinGame}
                                         className="w-full px-6 py-3 bg-purple-600 text-white font-bold rounded-lg hover:bg-purple-700 transition-colors"
-                                        disabled={isLoadingImage}
+                                        disabled={isGameStarting}
                                     >
-                                        {isLoadingImage ? 'Joining...' : 'Join Game'}
+                                        {isGameStarting ? 'Joining...' : 'Join Game'}
                                     </button>
                                 </div>
                             </>
@@ -229,23 +224,19 @@
                                 </div>
 
                                 <div id="prompt-area" className="my-8">
-                                    {isLoadingImage ? (
+                                    {prompt ? (
+                                        <img
+                                            src={prompt}
+                                            alt="Random Game Prompt"
+                                            className="rounded-xl shadow-lg border-2 border-gray-700 mx-auto w-full h-[300px] object-cover"
+                                        />
+                                    ) : (
                                         <div className="w-full h-[300px] bg-gray-800 rounded-xl flex items-center justify-center">
                                             <svg className="animate-spin h-10 w-10 text-purple-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                             </svg>
                                         </div>
-                                    ) : (
-                                        prompt ? (
-                                            <img
-                                                src={prompt}
-                                                alt="Random Game Prompt"
-                                                className="rounded-xl shadow-lg border-2 border-gray-700 mx-auto w-full h-[300px] object-cover"
-                                            />
-                                        ) : (
-                                            <p className="text-xl text-gray-500">Waiting for players...</p>
-                                        )
                                     )}
                                 </div>
 
