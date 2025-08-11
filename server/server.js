@@ -44,7 +44,8 @@ io.on('connection', (socket) => {
                 totalRounds: totalRounds,
                 scores: {},
                 roundTimer: null,
-                roundEnded: false
+                roundEnded: false,
+                roundStartTime: null
             };
             games[gameCode].scores[socket.id] = 0;
             socket.join(gameCode);
@@ -84,6 +85,12 @@ io.on('connection', (socket) => {
         const game = games[gameCode];
 
         if (game && game.responses[socket.id] === undefined) {
+            // Prevent accidental instant empty submissions at round start
+            const now = Date.now();
+            if ((!word || word.trim() === '') && now - game.roundStartTime < 2000) {
+                return;
+            }
+
             game.responses[socket.id] = word;
             
             if (Object.keys(game.responses).length === 2 && !game.roundEnded) {
@@ -117,6 +124,7 @@ async function startNewRound(gameCode) {
 
         game.responses = {};
         game.roundEnded = false;
+        game.roundStartTime = Date.now();
 
         // Pick a deterministic image ID for both players
         game.imageSeed = Math.floor(Math.random() * 1000); // picsum IDs up to ~1084
