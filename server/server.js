@@ -108,13 +108,14 @@ async function startNewRound(gameCode) {
     const game = games[gameCode];
     if (game) {
         game.responses = {};
-        
-        const imageSeed = Math.random();
-        const imageUrl = `https://picsum.photos/400/300?random=${imageSeed}`;
-        
+
+        // Generate the seed only once per round and store it
+        game.imageSeed = Math.floor(Math.random() * 100000);
+        const imageUrl = `https://picsum.photos/400/300?random=${game.imageSeed}`;
+
         game.prompt = imageUrl;
         io.to(gameCode).emit('new_round', { prompt: imageUrl, currentRound: game.currentRound });
-        
+
         setTimeout(() => {
             if (game.state === 'playing') {
                 endRound(gameCode);
