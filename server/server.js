@@ -42,7 +42,9 @@ io.on('connection', (socket) => {
                 imageSeed: null,
                 currentRound: 1,
                 totalRounds: totalRounds,
-                scores: {}
+                scores: {},
+                roundTimer: null,
+                roundEnded: false
             };
             games[gameCode].scores[socket.id] = 0;
             socket.join(gameCode);
@@ -84,7 +86,7 @@ io.on('connection', (socket) => {
         if (game && game.responses[socket.id] === undefined) {
             game.responses[socket.id] = word;
             
-            if (Object.keys(game.responses).length === 2) {
+            if (Object.keys(game.responses).length === 2 && !game.roundEnded) {
                 endRound(gameCode);
             }
         }
@@ -107,17 +109,25 @@ io.on('connection', (socket) => {
 async function startNewRound(gameCode) {
     const game = games[gameCode];
     if (game) {
+        // Clear any old timer
+        if (game.roundTimer) {
+            clearTimeout(game.roundTimer);
+            game.roundTimer = null;
+        }
+
         game.responses = {};
+        game.roundEnded = false;
 
         // Pick a deterministic image ID for both players
-        game.imageSeed = Math.floor(Math.random() * 1000); // picsum IDs go up to ~1084
+        game.imageSeed = Math.floor(Math.random() * 1000); // picsum IDs up to ~1084
         const imageUrl = `https://picsum.photos/id/${game.imageSeed}/400/300`;
 
         game.prompt = imageUrl;
         io.to(gameCode).emit('new_round', { prompt: imageUrl, currentRound: game.currentRound });
 
-        setTimeout(() => {
-            if (game.state === 'playing') {
+        // Start timer for this round
+        game.roundTimer = setTimeout(() => {
+            if (game.state === 'playing' && !game.roundEnded) {
                 endRound(gameCode);
             }
         }, 30000);
@@ -126,7 +136,15 @@ async function startNewRound(gameCode) {
 
 function endRound(gameCode) {
     const game = games[gameCode];
-    if (game && game.state === 'playing') {
+    if (game && game.state === 'playing' && !game.roundEnded) {
+        game.roundEnded = true;
+
+        // Stop any running timer
+        if (game.roundTimer) {
+            clearTimeout(game.roundTimer);
+            game.roundTimer = null;
+        }
+
         const [player1Id, player2Id] = game.players.map(p => p.id);
         const [player1Word, player2Word] = [game.responses[player1Id], game.responses[player2Id]];
 
