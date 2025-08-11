@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MindLink: Telepathy Challenge</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-[#1a1a2e]">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+        
+        const App = () => {
+            const [view, setView] = useState('home'); // 'home', 'lobby', 'game'
+            const [playerName, setPlayerName] = useState('');
+            const [gameCode, setGameCode] = useState('');
+            const [gameTime, setGameTime] = useState(30);
+            const [prompt, setPrompt] = useState(null);
+            const [playerInput, setPlayerInput] = useState('');
+            const [round, setRound] = useState(1);
+            const [score, setScore] = useState(0);
+            const [timeLeft, setTimeLeft] = useState(0);
+            const [results, setResults] = useState(null);
+            const [otherPlayerName, setOtherPlayerName] = useState('Waiting...'); 
+            const socketRef = useRef(null);
+
+            // Connect to the WebSocket server
+            useEffect(() => {
+                socketRef.current = io('http://localhost:3000');
+                
+                socketRef.current.on('game_created', (data) => {
+                    setView('lobby');
+                    setGameCode(data.gameCode);
+                });
+
+                socketRef.current.on('game_started', (data) => {
+                    setOtherPlayerName(data.player1 === playerName ? data.player2 : data.player1);
+                    setView('game');
+                });
+
+                socketRef.current.on('new_round', (data) => {
+                    setPrompt(data.prompt);
+                    setPlayerInput('');
+                    setResults(null);
+                    setTimeLeft(gameTime);
+                });
+
+                socketRef.current.on('round_over', (data) => {
+                    if (data.match) {
+                        setScore(prevScore => prevScore + 1);
+                        setResults({ status: 'match', message: "It's a match! Shared point earned." });
+                    } else {
+                        setResults({ status: 'no-match', message: "No match. Try again!" });
+                    }
+                });
+
+                socketRef.current.on('player_disconnected', () => {
+                    setResults({ status: 'info', message: 'The other player has disconnected.' });
+                    setTimeout(showHome, 3000);
+                });
+
+                return () => socketRef.current.disconnect();
+            }, [playerName, gameTime]);
+
+            // Handle game timer countdown
+            useEffect(() => {
+                if (timeLeft > 0 && view === 'game') {
+                    const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
+                    return () => clearTimeout(timer);
+                } else if (timeLeft === 0 && view === 'game') {
+                    socketRef.current.emit('submit_word', { gameCode, word: '' });
+                }
+            }, [timeLeft, view]);
+
+            // Handle switching views
+            const showHome = () => {
+                    setView('home');
+                    setPlayerName('');
+                    setGameCode('');
+            };
+
+            // Generate a random game code
+            const generateGameCode = () => {
+                const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+                let code = '';
+                for (let i = 0; i < 4; i++) {
+                    code += chars.charAt(Math.floor(Math.random() * chars.length));
+                }
+                return code;
+            };
+
+            const createGame = () => {
+                if (playerName.trim() === '') {
+                    return;
+                }
+                const newGameCode = generateGameCode();
+                socketRef.current.emit('create_game', { gameCode: newGameCode, playerName });
+            };
+
+            const joinGame = () => {
+                if (playerName.trim() === '') {
+                    return;
+                }
+                if (gameCode.trim().length !== 4) {
+                    return;
+                }
+                socketRef.current.emit('join_game', { gameCode, playerName });
+            };
+
+            const handleSubmit = () => {
+                if (playerInput.trim() !== '' && !playerInput.includes(' ')) {
+                    socketRef.current.emit('submit_word', { gameCode, word: playerInput });
+                } else {
+                }
+            };
+
+            const getScreenContent = () => {
+                switch (view) {
+                    case 'home':
+                        return (
+                            <>
+                                <h2 className="text-3xl font-bold mb-8">Ready to Connect?</h2>
+                                <div className="space-y-6">
+                                    <input
+                                        type="text"
+                                        placeholder="Enter your name"
+                                        value={playerName}
+                                        onChange={(e) => setPlayerName(e.target.value)}
+                                        className="w-full p-3 rounded-lg border-2 border-gray-700 bg-gray-800 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                                    />
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-gray-400">Round Time:</span>
+                                        <div className="flex space-x-4">
+                                            <button
+                                                onClick={() => setGameTime(15)}
+                                                className={`px-4 py-2 rounded-lg font-bold transition-colors ${
+                                                    gameTime === 15 ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                                                }`}
+                                            >
+                                                15s
+                                            </button>
+                                            <button
+                                                onClick={() => setGameTime(30)}
+                                                className={`px-4 py-2 rounded-lg font-bold transition-colors ${
+                                                    gameTime === 30 ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                                                }`}
+                                            >
+                                                30s
+                                            </button>
+                                            <button
+                                                onClick={() => setGameTime(45)}
+                                                className={`px-4 py-2 rounded-lg font-bold transition-colors ${
+                                                    gameTime === 45 ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                                                }`}
+                                            >
+                                                45s
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={createGame}
+                                        className="w-full px-6 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors"
+                                    >
+                                        Create Game
+                                    </button>
+                                </div>
+                                <div className="relative flex items-center py-5">
+                                    <div className="flex-grow border-t border-gray-700"></div>
+                                    <span className="flex-shrink mx-4 text-gray-500">OR</span>
+                                    <div className="flex-grow border-t border-gray-700"></div>
+                                </div>
+                                <div className="flex flex-col space-y-4">
+                                    <input
+                                        type="text"
+                                        placeholder="Enter Game Code"
+                                        value={gameCode}
+                                        onChange={(e) => setGameCode(e.target.value.toUpperCase())}
+                                        className="w-full p-3 text-center text-lg font-mono rounded-lg border-2 border-gray-700 bg-gray-800 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                                    />
+                                    <button
+                                        onClick={joinGame}
+                                        className="w-full px-6 py-3 bg-purple-600 text-white font-bold rounded-lg hover:bg-purple-700 transition-colors"
+                                    >
+                                        Join Game
+                                    </button>
+                                </div>
+                            </>
+                        );
+                    case 'lobby':
+                        return (
+                            <>
+                                <h2 className="text-3xl font-bold mb-4">Game Lobby</h2>
+                                <p className="text-gray-400 text-lg mb-8">
+                                    Share this code with your friend to start playing.
+                                </p>
+                                <div className="bg-gray-800 text-purple-400 p-6 rounded-lg text-4xl font-mono tracking-widest inline-block">
+                                    {gameCode}
+                                </div>
+                                <p className="mt-8 text-gray-500">Waiting for a second player...</p>
+                            </>
+                        );
+                    case 'game':
+                        return (
+                            <>
+                                <div className="flex justify-between items-center mb-6">
+                                    <p className="text-lg text-gray-400">Round: <span className="font-bold text-gray-100">{round}</span></p>
+                                    <p className="text-lg text-gray-400">Score: <span className="font-bold text-gray-100">{score}</span></p>
+                                </div>
+                                <div className="flex justify-between items-center mb-8">
+                                    <p className="text-lg text-gray-400">
+                                        You: <span className="font-bold text-gray-100">{playerName}</span>
+                                    </p>
+                                    <p className="text-lg text-gray-400">
+                                        Opponent: <span className="font-bold text-gray-100">{otherPlayerName}</span>
+                                    </p>
+                                </div>
+
+                                <div id="prompt-area" className="my-8">
+                                    {prompt ? (
+                                        <img
+                                            src={`https://picsum.photos/seed/${prompt}/400/300`}
+                                            alt="Random Game Prompt"
+                                            className="rounded-xl shadow-lg border-2 border-gray-700 mx-auto"
+                                            onError={(e) => {
+                                                e.target.onerror = null;
+                                                e.target.src = 'https://placehold.co/400x300/16213e/e4e7ee?text=Image+Loading+Failed';
+                                            }}
+                                        />
+                                    ) : (
+                                        <p className="text-xl text-gray-500">Waiting for players...</p>
+                                    )}
+                                </div>
+
+                                <div className="relative">
+                                    <div
+                                        className={`w-full h-2 rounded-full bg-gray-700 overflow-hidden`}
+                                    >
+                                        <div
+                                            className="h-full bg-purple-500 transition-all duration-1000 ease-linear"
+                                            style={{ width: `${(timeLeft / gameTime) * 100}%` }}
+                                        ></div>
+                                    </div>
+                                    <div className="absolute inset-0 flex justify-center items-center text-sm font-bold text-white">
+                                        {timeLeft}s
+                                    </div>
+                                </div>
+
+                                <div className="flex mt-8 space-x-4">
+                                    <input
+                                        type="text"
+                                        placeholder="Type your word"
+                                        value={playerInput}
+                                        onChange={(e) => setPlayerInput(e.target.value)}
+                                        onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+                                        className="flex-grow p-3 rounded-lg border-2 border-gray-700 bg-gray-800 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                                        disabled={!prompt || results}
+                                    />
+                                    <button
+                                        onClick={handleSubmit}
+                                        className="px-6 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                                        disabled={!prompt || results}
+                                    >
+                                        Submit
+                                    </button>
+                                </div>
+
+                                {results && (
+                                    <div
+                                        className={`mt-6 p-4 rounded-lg font-bold text-center ${
+                                            results.status === 'match' ? 'bg-green-600/20 text-green-400' : 'bg-red-600/20 text-red-400'
+                                        }`}
+                                    >
+                                        {results.message}
+                                    </div>
+                                )}
+                            </>
+                        );
+                }
+            };
+
+            return (
+                <div className="min-h-screen bg-[#1a1a2e] text-[#e4e7ee] flex items-center justify-center p-4">
+                    <div className="absolute top-8 left-8">
+                        <button onClick={showHome}>
+                            <img src="logo.png" alt="MindLink Logo" className="w-24 md:w-32 hover:scale-105 transition-transform" />
+                        </button>
+                    </div>
+                    <div className="bg-[#16213e] p-8 md:p-12 rounded-2xl shadow-2xl w-full max-w-xl text-center border-2 border-[#2c3a5e]">
+                        <h1 className="text-4xl md:text-5xl font-extrabold text-purple-400 mb-8 tracking-wide">
+                            MindLink
+                        </h1>
+                        {getScreenContent()}
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
