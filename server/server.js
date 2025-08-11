@@ -30,11 +30,6 @@ const imagePrompts = [
     'trying to open a package with your teeth'
 ];
 
-// Serve the index.html file for the root route.
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, '../client/index.html'));
-});
-
 // Serve static files from the 'client' directory for all other routes.
 app.use(express.static(path.join(__dirname, '../client')));
 
