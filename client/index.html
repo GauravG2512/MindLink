@@ -37,7 +37,7 @@
             const socketRef = useRef(null);
             const [isGameStarting, setIsGameStarting] = useState(false);
 
-            // Connect to the WebSocket server
+            // Connect to the WebSocket server once on component mount
             useEffect(() => {
                 // Use the live Render URL for the server connection
                 socketRef.current = io('https://mindlink-server.onrender.com');
@@ -75,7 +75,7 @@
                 });
 
                 return () => socketRef.current.disconnect();
-            }, [playerName, gameTime]);
+            }, [playerName]); // Dependency array updated to not include gameTime
 
             // Handle game timer countdown
             useEffect(() => {

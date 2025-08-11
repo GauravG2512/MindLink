@@ -110,8 +110,10 @@ async function startNewRound(gameCode) {
     if (game) {
         game.responses = {};
 
-        // ====> Using Lorem Picsum for a random image <====
-        const imageUrl = `https://picsum.photos/400/300?random=${Math.random()}`;
+        // Use a unique random seed for each round to ensure the same image for both players
+        const imageSeed = Math.random();
+        const imageUrl = `https://picsum.photos/400/300?random=${imageSeed}`;
+        
         game.prompt = imageUrl;
         io.to(gameCode).emit('new_round', { prompt: imageUrl });
         
