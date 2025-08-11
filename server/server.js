@@ -126,7 +126,9 @@ async function startNewRound(gameCode) {
         const textPrompt = imagePrompts[randomIndex];
         game.responses = {};
 
-        const apiKey = "";
+        // ====> YOUR API KEY IS INSERTED HERE <====
+        const apiKey = "AIzaSyAQ_Y7sLfXGz3ZEIzWkjQpV1pZdzBgDE-w";
+        
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`;
         const payload = { instances: { prompt: textPrompt }, parameters: { "sampleCount": 1} };
 
